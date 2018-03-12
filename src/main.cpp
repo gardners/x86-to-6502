@@ -156,6 +156,8 @@ struct mos6502 : ASMLine
     beq,
     bmi,
     bpl,
+    bcc,
+    bcs,
     jmp,
     adc,
     sbc,
@@ -178,6 +180,8 @@ struct mos6502 : ASMLine
       case OpCode::bne:
       case OpCode::bmi:
       case OpCode::bpl:
+      case OpCode::bcc:
+      case OpCode::bcs:
         return true;
       case OpCode::lda:
       case OpCode::ldx:
@@ -255,8 +259,10 @@ struct mos6502 : ASMLine
       case OpCode::jmp:
       case OpCode::bne:
       case OpCode::bmi:
-      case OpCode::bpl:
       case OpCode::beq:
+      case OpCode::bpl:
+      case OpCode::bcc:
+      case OpCode::bcs:
       case OpCode::rts:
       case OpCode::clc:
       case OpCode::sec:
@@ -348,6 +354,10 @@ struct mos6502 : ASMLine
         return "bmi";
       case OpCode::bpl:
         return "bpl";
+      case OpCode::bcc:
+        return "bcc";
+      case OpCode::bcs:
+        return "bcs";
       case OpCode::beq:
         return "beq";
       case OpCode::jmp:
@@ -761,7 +771,7 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       instructions.emplace_back(mos6502::OpCode::beq, o1);
       break;
     case i386::OpCode::jg:
-      instructions.emplace_back(mos6502::OpCode::bpl, o1);
+      instructions.emplace_back(mos6502::OpCode::bcs, o1);
       break;
     case i386::OpCode::js:
       instructions.emplace_back(mos6502::OpCode::bmi, o1);
