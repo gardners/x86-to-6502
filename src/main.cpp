@@ -130,6 +130,7 @@ struct mos6502 : ASMLine
   {
     unknown,
     lda,
+      ldx,
     ldy,
     tay,
     tya,
@@ -163,6 +164,7 @@ struct mos6502 : ASMLine
       bit,
 
     // 45GS02 / 4510 opcodes
+      ldz,
       taz,
       tza,
       neg
@@ -176,6 +178,7 @@ struct mos6502 : ASMLine
       case OpCode::bmi:
         return true;
       case OpCode::lda:
+      case OpCode::ldx:
       case OpCode::ldy:
       case OpCode::tay:
       case OpCode::tya:
@@ -206,6 +209,7 @@ struct mos6502 : ASMLine
       case OpCode::bit:
 
 	// 45GS02 / 4510 opcodes
+    case OpCode::ldz:
     case OpCode::taz:
     case OpCode::tza:
     case OpCode::neg:
@@ -224,6 +228,7 @@ struct mos6502 : ASMLine
       case OpCode::bit:
         return true;
       case OpCode::lda:
+      case OpCode::ldx:
       case OpCode::ldy:
       case OpCode::tay:
       case OpCode::tya:
@@ -254,6 +259,7 @@ struct mos6502 : ASMLine
       case OpCode::sec:
 
 	// 45GS02 / 4510 opcodes
+    case OpCode::ldz:
     case OpCode::taz:
     case OpCode::tza:
     case OpCode::neg:
@@ -285,8 +291,12 @@ struct mos6502 : ASMLine
     switch (o) {
       case OpCode::lda:
         return "lda";
+      case OpCode::ldx:
+        return "ldx";
       case OpCode::ldy:
         return "ldy";
+      case OpCode::ldz:
+        return "ldz";
       case OpCode::tax:
         return "tax";
       case OpCode::txa:
@@ -536,15 +546,41 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       break;
     case i386::OpCode::movl:
       if (o1.type == Operand::Type::reg && o2.type == Operand::Type::reg) {
-        instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
-        instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num, 1));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	if (cpu_45gs02) {
+	  // LDA32 source
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
+	  // STA32 destination
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));	  
+	} else {
+	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
+	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num, 1));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num, 2));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 2));
+	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num, 3));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 3));
+	}
       } else if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg) {
-	instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<" + o1.value));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
-	instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#>" + o1.value));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	if (cpu_45gs02) {
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" & $FFFF]"));
+	  instructions.emplace_back(mos6502::OpCode::ldx, Operand(o1.type, "#>[" + o1.value+" & $FFFF]"));
+	  instructions.emplace_back(mos6502::OpCode::ldy, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
+	  instructions.emplace_back(mos6502::OpCode::ldz, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
+	  // Then issue STA32
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
+	} else {
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<" + o1.value));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#>" + o1.value));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	}
       } else {
         throw std::runtime_error("Cannot translate movl instruction");
       }
