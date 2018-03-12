@@ -7,6 +7,9 @@
 #include <map>
 #include <cctype>
 
+// 1 for MEGA65 CPU, 0 for normal 6502
+int cpu_45gs02=1;
+
 struct ASMLine
 {
   enum class Type
@@ -69,27 +72,54 @@ struct Operand
   }
 };
 
-Operand get_register(const int reg_num, const int offset = 0) {
+Operand get_register(const int reg_num_in, const int offset = 0) {
+
+  const int reg_num = reg_num_in + offset;
+  
   switch (reg_num) {
-    //  http://sta.c64.org/cbm64mem.html
-    case 0x00: return Operand(Operand::Type::literal, "$03"); // unused, fp->int routine pointer
-    case 0x01: return Operand(Operand::Type::literal, "$04");
-    case 0x02: return Operand(Operand::Type::literal, "$05"); // unused, int->fp routine pointer
-    case 0x03: return Operand(Operand::Type::literal, "$06");
-    case 0x04: return Operand(Operand::Type::literal, "$fb"); // unused 
-    case 0x05: return Operand(Operand::Type::literal, "$fc"); // unused
-    case 0x06: return Operand(Operand::Type::literal, "$fd"); // unused
-    case 0x07: return Operand(Operand::Type::literal, "$fe"); // unused
-    case 0x08: return Operand(Operand::Type::literal, "$22"); // unused
-    case 0x09: return Operand(Operand::Type::literal, "$23"); // unused
-    case 0x0A: return Operand(Operand::Type::literal, "$39"); // Current BASIC line number
-    case 0x0B: return Operand(Operand::Type::literal, "$3a"); // Current BASIC line number
-    case 0x10: return get_register(0x00 + offset);
-    case 0x11: return get_register(0x02 + offset);
-    case 0x12: return get_register(0x04 + offset);
-    case 0x13: return get_register(0x06 + offset);
-    case 0x14: return get_register(0x08 + offset);
-    case 0x15: return get_register(0x0A + offset);
+    // Each 386 register is really 4 bytes wide, so we need to have these
+    // in groups of four, so that we can do clever efficient things
+    // (especially for the MEGA65's GS4502 CPU that can do 32-bit accesses
+    
+    //  Usable ZP locations extracted from: http://sta.c64.org/cbm64mem.html
+    
+    // EAX
+  case 0x00: return Operand(Operand::Type::literal, "$03"); // unused, fp->int routine pointer
+  case 0x01: return Operand(Operand::Type::literal, "$04");
+  case 0x02: return Operand(Operand::Type::literal, "$05"); // unused, int->fp routine pointer
+  case 0x03: return Operand(Operand::Type::literal, "$06");
+    
+    // EBX
+  case 0x04: return Operand(Operand::Type::literal, "$fb"); // unused 
+  case 0x05: return Operand(Operand::Type::literal, "$fc"); // unused
+  case 0x06: return Operand(Operand::Type::literal, "$fd"); // unused
+  case 0x07: return Operand(Operand::Type::literal, "$fe"); // unused
+    
+    // ECX
+  case 0x08: return Operand(Operand::Type::literal, "$19"); // String stack
+  case 0x09: return Operand(Operand::Type::literal, "$1A"); // String stack
+  case 0x0A: return Operand(Operand::Type::literal, "$1B"); // String stack
+  case 0x0B: return Operand(Operand::Type::literal, "$1C"); // String stack
+
+    // EDX
+  case 0x0C: return Operand(Operand::Type::literal, "$1D"); // String stack
+  case 0x0D: return Operand(Operand::Type::literal, "$1E"); // String stack
+  case 0x0E: return Operand(Operand::Type::literal, "$1F"); // String stack
+  case 0x0F: return Operand(Operand::Type::literal, "$20"); // String stack
+
+    // ESI
+  case 0x10: return Operand(Operand::Type::literal, "$39"); // Current BASIC line number
+  case 0x11: return Operand(Operand::Type::literal, "$3A"); // Current BASIC line number
+  case 0x12: return Operand(Operand::Type::literal, "$3B"); // Current BASIC line number for CONT
+  case 0x13: return Operand(Operand::Type::literal, "$3C"); // Current BASIC line number for CONT
+
+    // EDI
+  case 0x14: return Operand(Operand::Type::literal, "$A7"); // RS232 things
+  case 0x15: return Operand(Operand::Type::literal, "$A8"); // RS232 things
+  case 0x16: return Operand(Operand::Type::literal, "$A9"); // RS232 things
+  case 0x17: return Operand(Operand::Type::literal, "$AA"); // RS232 things
+
+    
   };
   throw std::runtime_error("Unhandled register number: " + std::to_string(reg_num));
 }
@@ -103,6 +133,9 @@ struct mos6502 : ASMLine
     ldy,
     tay,
     tya,
+      tax,
+      txa,
+      nop,
     cpy,
     eor,
     sta,
@@ -127,8 +160,14 @@ struct mos6502 : ASMLine
     rts,
     clc,
     sec,
-    bit
-  };
+      bit,
+
+    // 45GS02 / 4510 opcodes
+      taz,
+      tza,
+      neg
+
+      };
 
   static bool get_is_branch(const OpCode o) {
     switch (o) {
@@ -140,6 +179,9 @@ struct mos6502 : ASMLine
       case OpCode::ldy:
       case OpCode::tay:
       case OpCode::tya:
+      case OpCode::tax:
+      case OpCode::txa:
+      case OpCode::nop:
       case OpCode::cpy:
       case OpCode::eor:
       case OpCode::sta:
@@ -162,7 +204,14 @@ struct mos6502 : ASMLine
       case OpCode::clc:
       case OpCode::sec:
       case OpCode::bit:
-      case OpCode::unknown:
+
+	// 45GS02 / 4510 opcodes
+    case OpCode::taz:
+    case OpCode::tza:
+    case OpCode::neg:
+	
+
+    case OpCode::unknown:
         break;
     }
     return false;
@@ -178,6 +227,9 @@ struct mos6502 : ASMLine
       case OpCode::ldy:
       case OpCode::tay:
       case OpCode::tya:
+      case OpCode::tax:
+      case OpCode::txa:
+      case OpCode::nop:
       case OpCode::eor:
       case OpCode::sta:
       case OpCode::sty:
@@ -200,6 +252,12 @@ struct mos6502 : ASMLine
       case OpCode::rts:
       case OpCode::clc:
       case OpCode::sec:
+
+	// 45GS02 / 4510 opcodes
+    case OpCode::taz:
+    case OpCode::tza:
+    case OpCode::neg:
+	
       case OpCode::unknown:
         break;
     }
@@ -229,10 +287,18 @@ struct mos6502 : ASMLine
         return "lda";
       case OpCode::ldy:
         return "ldy";
+      case OpCode::tax:
+        return "tax";
+      case OpCode::txa:
+        return "txa";
       case OpCode::tay:
         return "tay";
       case OpCode::tya:
         return "tya";
+      case OpCode::taz:
+        return "taz";
+      case OpCode::tza:
+        return "tza";
       case OpCode::cpy:
         return "cpy";
       case OpCode::eor:
@@ -283,6 +349,10 @@ struct mos6502 : ASMLine
         return "sec";
       case OpCode::bit:
         return "bit";
+      case OpCode::neg:
+        return "neg";
+      case OpCode::nop:
+        return "nop";
       case OpCode::unknown:
         return "";
     };
@@ -412,38 +482,26 @@ struct i386 : ASMLine
     }
 
     if (o[0] == '%') {
-      if (o == "%al") {
+      if (o == "%al" || o == "%ax" || o == "%eax") {
         return Operand(Operand::Type::reg, 0x00);
       } else if (o == "%ah") {
         return Operand(Operand::Type::reg, 0x01);
-      } else if (o == "%bl") {
-        return Operand(Operand::Type::reg, 0x02);
-      } else if (o == "%bh") {
-        return Operand(Operand::Type::reg, 0x03);
-      } else if (o == "%cl") {
+      } else if (o == "%bl" || o == "%bx" || o == "%ebx") {
         return Operand(Operand::Type::reg, 0x04);
-      } else if (o == "%ch") {
+      } else if (o == "%bh") {
         return Operand(Operand::Type::reg, 0x05);
-      } else if (o == "%dl") {
-        return Operand(Operand::Type::reg, 0x06);
-      } else if (o == "%dh") {
-        return Operand(Operand::Type::reg, 0x07);
-      } else if (o == "%sil") {
+      } else if (o == "%cl" || o == "%cx" || o == "%ecx") {
         return Operand(Operand::Type::reg, 0x08);
-      } else if (o == "%dil") {
-        return Operand(Operand::Type::reg, 0x0A);
-      } else if (o == "%ax" || o == "%eax") {
+      } else if (o == "%ch") {
+        return Operand(Operand::Type::reg, 0x09);
+      } else if (o == "%dl" || o == "%dx" || o == "%edx") {
+        return Operand(Operand::Type::reg, 0x0c);
+      } else if (o == "%dh") {
+        return Operand(Operand::Type::reg, 0x0d);
+      } else if (o == "%sil" || o == "%si" || o == "%esi") {
         return Operand(Operand::Type::reg, 0x10);
-      } else if (o == "%bx" || o == "%ebx") {
-        return Operand(Operand::Type::reg, 0x11);
-      } else if (o == "%cx" || o == "%ecx") {
-        return Operand(Operand::Type::reg, 0x12);
-      } else if (o == "%dx" || o == "%edx") {
-        return Operand(Operand::Type::reg, 0x13);
-      } else if (o == "%si" || o == "%esi") {
+      } else if (o == "%dil" || o == "%di" || o == "%edi") {
         return Operand(Operand::Type::reg, 0x14);
-      } else if (o == "%di" || o == "%edi") {
-        return Operand(Operand::Type::reg, 0x15);
       } else {
         throw std::runtime_error("Unknown register operand: '" + o + "'");
       }
@@ -494,9 +552,25 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
     case i386::OpCode::xorl:
       if (o1.type == Operand::Type::reg && o2.type == Operand::Type::reg
           && o1.reg_num == o2.reg_num) {
-        instructions.emplace_back(mos6502::OpCode::lda, Operand(Operand::Type::literal, "#$00"));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	// XOR same register clears the register contents
+
+	if (cpu_45gs02) {
+	  // For 32-bit clear, we need to set A,X,Y and Z to $00
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(Operand::Type::literal, "#$00"));
+	  instructions.emplace_back(mos6502::OpCode::tax);
+	  instructions.emplace_back(mos6502::OpCode::tay);
+	  instructions.emplace_back(mos6502::OpCode::taz);
+	  // Now construct STA32
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
+	} else {
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(Operand::Type::literal, "#$00"));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 2));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 3));
+	}
       } else {
         throw std::runtime_error("Cannot translate xorl instruction");
       }
