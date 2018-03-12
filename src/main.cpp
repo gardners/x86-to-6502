@@ -411,6 +411,7 @@ struct i386 : ASMLine
     ret,
     movb,
     cmpb,
+    cmpl,
     movl,
     jmp,
     jne,
@@ -418,7 +419,7 @@ struct i386 : ASMLine
     js,
     testb,
     incl,
-    incb,
+    incb,      
     decl,
     decb,
     sarl,
@@ -455,6 +456,7 @@ struct i386 : ASMLine
           if (o == "ret") return OpCode::ret;
           if (o == "movb") return OpCode::movb;
           if (o == "cmpb") return OpCode::cmpb;
+          if (o == "cmpl") return OpCode::cmpl;
           if (o == "movl") return OpCode::movl;
           if (o == "jmp") return OpCode::jmp;
           if (o == "testb") return OpCode::testb;
@@ -567,6 +569,7 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
 	}
       } else if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg) {
 	if (cpu_45gs02) {
+	  // Prepare the constant
 	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::ldx, Operand(o1.type, "#>[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::ldy, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
@@ -726,6 +729,23 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
         instructions.emplace_back(mos6502::OpCode::inc, o1);
       }
       break;
+    case i386::OpCode::incl:
+      if (o1.type == Operand::Type::reg) {
+	if (cpu_45gs02) {
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num));
+	} else
+	  throw std::runtime_error("incl opcode requires 45GS02");
+      } else {
+	if (cpu_45gs02) {
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::inc, o1);
+	} else
+	  throw std::runtime_error("incl opcode requires 45GS02");
+      }
+      break;
     case i386::OpCode::jne:
       instructions.emplace_back(mos6502::OpCode::bne, o1);
       break;
@@ -768,6 +788,34 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       } else {
         throw std::runtime_error("Cannot translate cmpb instruction");
       }
+      break;
+    case i386::OpCode::cmpl:
+      if (cpu_45gs02) {
+	if (o1.type == Operand::Type::literal && o2.type == Operand::Type::literal) {
+	  // Er... we are comparing #$nn with #$mm ???
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::lda, o2);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::cmp, o1);
+	} else if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg) {
+	  // Compare register to literal
+	  // Subtract second from first, but don't store result
+	  // Prepare the constant
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" & $FFFF]"));
+	  instructions.emplace_back(mos6502::OpCode::ldx, Operand(o1.type, "#>[" + o1.value+" & $FFFF]"));
+	  instructions.emplace_back(mos6502::OpCode::ldy, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
+	  instructions.emplace_back(mos6502::OpCode::ldz, Operand(o1.type, "#>[" + o1.value+" >> 16]"));
+
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::sbc, get_register(o2.reg_num));
+	} else {
+	throw std::runtime_error("Unsupported operand combination for cmpl");	  
+	}
+      } else
+	throw std::runtime_error("cmpl opcode requires 45GS02");
       break;
     case i386::OpCode::andb:
       if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg)  {
