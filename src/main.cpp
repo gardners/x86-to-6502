@@ -155,6 +155,7 @@ struct mos6502 : ASMLine
     bne,
     beq,
     bmi,
+    bpl,
     jmp,
     adc,
     sbc,
@@ -176,6 +177,7 @@ struct mos6502 : ASMLine
       case OpCode::beq:
       case OpCode::bne:
       case OpCode::bmi:
+      case OpCode::bpl:
         return true;
       case OpCode::lda:
       case OpCode::ldx:
@@ -223,6 +225,8 @@ struct mos6502 : ASMLine
 
   static bool get_is_comparison(const OpCode o) {
     switch (o) {
+      case OpCode::adc:
+      case OpCode::sbc:
       case OpCode::cmp:
       case OpCode::cpy:
       case OpCode::bit:
@@ -251,9 +255,8 @@ struct mos6502 : ASMLine
       case OpCode::jmp:
       case OpCode::bne:
       case OpCode::bmi:
+      case OpCode::bpl:
       case OpCode::beq:
-      case OpCode::adc:
-      case OpCode::sbc:
       case OpCode::rts:
       case OpCode::clc:
       case OpCode::sec:
@@ -343,6 +346,8 @@ struct mos6502 : ASMLine
         return "bne";
       case OpCode::bmi:
         return "bmi";
+      case OpCode::bpl:
+        return "bpl";
       case OpCode::beq:
         return "beq";
       case OpCode::jmp:
@@ -416,6 +421,7 @@ struct i386 : ASMLine
     jmp,
     jne,
     je,
+    jg,
     js,
     testb,
     incl,
@@ -465,6 +471,7 @@ struct i386 : ASMLine
           if (o == "decl") return OpCode::decl;
           if (o == "jne") return OpCode::jne;
           if (o == "je") return OpCode::je;
+          if (o == "jg") return OpCode::jg;
           if (o == "js") return OpCode::js;
           if (o == "subl") return OpCode::subl;
           if (o == "subb") return OpCode::subb;
@@ -557,6 +564,7 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));	  
+
 	} else {
 	  instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
 	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
@@ -751,6 +759,9 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       break;
     case i386::OpCode::je:
       instructions.emplace_back(mos6502::OpCode::beq, o1);
+      break;
+    case i386::OpCode::jg:
+      instructions.emplace_back(mos6502::OpCode::bpl, o1);
       break;
     case i386::OpCode::js:
       instructions.emplace_back(mos6502::OpCode::bmi, o1);
