@@ -570,7 +570,7 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
 	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::ldx, Operand(o1.type, "#>[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::ldy, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
-	  instructions.emplace_back(mos6502::OpCode::ldz, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
+	  instructions.emplace_back(mos6502::OpCode::ldz, Operand(o1.type, "#>[" + o1.value+" >> 16]"));
 	  // Then issue STA32
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::neg);
