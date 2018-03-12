@@ -6,9 +6,13 @@
 #include <cassert>
 #include <map>
 #include <cctype>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <strings.h>
 
 // 1 for MEGA65 CPU, 0 for normal 6502
-int cpu_45gs02=1;
+int cpu_45gs02=0;
 
 struct ASMLine
 {
@@ -1126,7 +1130,7 @@ bool fix_overwritten_flags(std::vector<mos6502> &instructions)
 }
 
 
-int main()
+int main(int argc,char **argv)
 {
   std::regex Comment(R"(\s*\#.*)");
   std::regex Label(R"(^(\S+):.*)");
@@ -1139,6 +1143,34 @@ int main()
 
   std::vector<i386> instructions;
 
+  int c=0;
+  while ((c=getopt(argc,argv,"m:"))!=-1) {
+    switch(c) {
+    case 'm':
+      {
+	char *cpu_type=optarg;
+	if (!(strcasecmp(cpu_type,"45gs02")&&strcasecmp(cpu_type,"mega65")))
+	  cpu_45gs02=1;
+	else if (!(strcasecmp(cpu_type,"6502")&&strcasecmp(cpu_type,"6510")))
+	  cpu_45gs02=0;
+	else
+	  {
+	    std::cout << "Illegal CPU type specified.  Valid values are 6502 and 45gs02\n";
+	    exit(-1);
+	  }
+      }
+      break;
+    default:
+      std::cout << "Illegal option\n"
+		<< "usage: x86-to-6502 [-m <target>]\n"
+		<< "\n"
+		<< "Valid targets are: 6502 and 45gs02\n"
+		<< "\n";
+      exit(-1);
+      break;
+    }
+  }
+  
   while (std::cin.good())
   {
     std::string line;
