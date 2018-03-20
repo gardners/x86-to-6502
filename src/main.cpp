@@ -601,10 +601,14 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
 	} else {
-	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<" + o1.value));
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
-	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#>" + o1.value));
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#>[" + o1.value+" & $FFFF]"));
 	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 1));
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#<[" + o1.value+" >> 16]"));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 2));
+	  instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, "#>[" + o1.value+" >> 16]"));
+	  instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num, 3));
 	}
       } else {
         throw std::runtime_error("Cannot translate movl instruction");
