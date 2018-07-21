@@ -761,8 +761,19 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::neg);
 	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num));
-	} else
-	  throw std::runtime_error("incl opcode requires 45GS02");
+	} else {
+	  static int incl_count=0;
+	  char new_label_name[32];
+	  snprintf(new_label_name,31,"__incl_%d",incl_count++);
+	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num,1));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num,2));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::inc, get_register(o1.reg_num,3));
+	  instructions.emplace_back(ASMLine::Type::Label, new_label_name);
+	}
       } else {
 	if (cpu_45gs02) {
 	  instructions.emplace_back(mos6502::OpCode::neg);
