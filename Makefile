@@ -13,3 +13,6 @@ x86-to-6502:	Makefile src/main.cpp
 
 %.45gs02:	%.x86
 	./x86-to-6502 -m 45gs02 < $< > $@
+
+%.cc65: %.c
+	cc65 -o $@ $<
