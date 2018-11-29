@@ -471,8 +471,15 @@ Operand get_register(const int reg_num_in, const int offset = 0) {
 
 std::string fixup_8bit_literal(const std::string &s)
 {
-  if (!strcmp(s.c_str(),"%eax")) return get_register(i386::parse_operand(s).reg_num,0).value;
-  if (!strcmp(s.c_str(),"(%eax)")) return "(" + get_register(0,0).value + ")";
+  // For now allow only the four main 32-bit registers
+  if (s=="%eax") return get_register(i386::parse_operand(s).reg_num,0).value;
+  if (s=="(%eax)") return "(" + get_register(i386::parse_operand(s.substr(1,s.size()-2)).reg_num,0).value + ")";
+  if (s=="%ebx") return get_register(i386::parse_operand(s).reg_num,0).value;
+  if (s=="(%ebx)") return "(" + get_register(i386::parse_operand(s.substr(1,s.size()-2)).reg_num,0).value + ")";
+  if (s=="%ecx") return get_register(i386::parse_operand(s).reg_num,0).value;
+  if (s=="(%ecx)") return "(" + get_register(i386::parse_operand(s.substr(1,s.size()-2)).reg_num,0).value + ")";
+  if (s=="%edx") return get_register(i386::parse_operand(s).reg_num,0).value;
+  if (s=="(%edx)") return "(" + get_register(i386::parse_operand(s.substr(1,s.size()-2)).reg_num,0).value + ")";
 
   if (s[0] == '$')
   {
