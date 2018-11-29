@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <strings.h>
 
 // 1 for MEGA65 CPU, 0 for normal 6502
@@ -36,6 +37,9 @@ int parse_8bit_literal(const std::string &s)
 
 std::string fixup_8bit_literal(const std::string &s)
 {
+  if (!strcmp(s.c_str(),"%eax")) return "$03";
+  if (!strcmp(s.c_str(),"(%eax)")) return "($03)";
+
   if (s[0] == '$')
   {
     return "#" + std::to_string(static_cast<uint8_t>(parse_8bit_literal(s)));
@@ -563,6 +567,59 @@ struct i386 : ASMLine
   Operand operand2;
 };
 
+void append_fetchb(std::vector<mos6502> &instructions,const Operand &o1)
+{
+        if (o1.type==Operand::Type::literal) {
+          instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
+        }
+        else if (o1.value[0]=='(') {
+          // Indirect argument 
+          if (o1.value[1]=='%') {
+            // Indirect fetch via register.
+            // Only %eXX and %xX are allowed. (%xB) (writing using a point of 8-bit size) is not supported.
+            // Worse, for 6502 we have only 64K address space, so we need to check if the upper half of
+            // a 32-bit register is non-zero. if non-zero, don't write, so that we don't wrap the upper
+            // part of the address space back onto the bottom 64KB, which would probably corrupt things.
+            if (o1.value[2]=='e') {
+              // 32-bit register, so use 32-bit ZP indirect as access mode.
+              instructions.emplace_back(mos6502::OpCode::nop);
+              instructions.emplace_back(mos6502::OpCode::lda,Operand(o1.type,fixup_8bit_literal(o1.value)));
+            } else {
+              throw std::runtime_error("Cannot translate movb instruction");
+            }
+          } else {
+            throw std::runtime_error("Cannot translate movb instruction");
+          }
+        } else {
+          throw std::runtime_error("Cannot translate movb instruction");
+        }
+}
+
+void append_storeb(std::vector<mos6502> &instructions,const Operand &o1)
+{
+        if (o1.value[0]=='(') {
+          // Indirect argument 
+          if (o1.value[1]=='%') {
+            // Indirect store via register.
+            // Only %eXX and %xX are allowed. (%xB) (writing using a point of 8-bit size) is not supported.
+            // Worse, for 6502 we have only 64K address space, so we need to check if the upper half of
+            // a 32-bit register is non-zero. if non-zero, don't write, so that we don't wrap the upper
+            // part of the address space back onto the bottom 64KB, which would probably corrupt things.
+            if (o1.value[2]=='e') {
+              // 32-bit register, so use 32-bit ZP indirect as access mode.
+              instructions.emplace_back(mos6502::OpCode::nop);
+              instructions.emplace_back(mos6502::OpCode::sta,Operand(o1.type,fixup_8bit_literal(o1.value)));
+            } else {
+              throw std::runtime_error("Cannot translate movb instruction");
+            }
+          } else {
+            throw std::runtime_error("Cannot translate movb instruction");
+          }
+        } else {
+          instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
+        }
+}
+
 void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCode op, const Operand &o1, const Operand &o2)
 {
   switch(op)
@@ -678,21 +735,26 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       break;
 #endif
     case i386::OpCode::movb:
-      if (o1.type == Operand::Type::literal && o2.type == Operand::Type::literal) {
+      // There are lots of addressing modes for the source and destination.  We need to support
+      // them all.  We use the 6502 accumulator as the intermediate storage in all cases.
+      append_fetchb(instructions,o1);
+      append_storeb(instructions,o2);
+#if 0
+      if (o1.type == Operand::Type::literal) {
         instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
+      } else if (o1.type == Operand::Type::reg) {
+      } else {
+        throw std::runtime_error("Cannot translate movb instruction");
+      }
+      if (o2.type == Operand::Type::literal) {
         instructions.emplace_back(mos6502::OpCode::sta, o2);
-      } else if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg) {
-        instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
-        instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
-      } else if (o1.type == Operand::Type::reg && o2.type == Operand::Type::literal) {
-        instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
-        instructions.emplace_back(mos6502::OpCode::sta, o2);
-      } else if (o1.type == Operand::Type::reg && o2.type == Operand::Type::reg) {
+      } else if (o2.type == Operand::Type::reg) {
         instructions.emplace_back(mos6502::OpCode::lda, get_register(o1.reg_num));
         instructions.emplace_back(mos6502::OpCode::sta, get_register(o2.reg_num));
       } else {
         throw std::runtime_error("Cannot translate movb instruction");
       }
+#endif
       break;
     case i386::OpCode::orb:
       if (o1.type == Operand::Type::literal && o2.type == Operand::Type::literal) {
