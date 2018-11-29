@@ -15,39 +15,6 @@
 // 1 for MEGA65 CPU, 0 for normal 6502
 int cpu_45gs02=0;
 
-struct ASMLine
-{
-  enum class Type
-  {
-    Label,
-    Instruction,
-    Directive
-  };
-
-  ASMLine(Type t, std::string te) : type(t), text(std::move(te)) {}
-
-  Type type;
-  std::string text;
-};
-
-int parse_8bit_literal(const std::string &s)
-{
-  return std::stoi(std::string(std::next(std::begin(s)), std::end(s)));
-}
-
-std::string fixup_8bit_literal(const std::string &s)
-{
-  if (!strcmp(s.c_str(),"%eax")) return "$03";
-  if (!strcmp(s.c_str(),"(%eax)")) return "($03)";
-
-  if (s[0] == '$')
-  {
-    return "#" + std::to_string(static_cast<uint8_t>(parse_8bit_literal(s)));
-  } else {
-    return s;
-  }
-}
-
 struct Operand
 {
   enum class Type
@@ -80,57 +47,21 @@ struct Operand
   }
 };
 
-Operand get_register(const int reg_num_in, const int offset = 0) {
-
-  const int reg_num = reg_num_in + offset;
-  
-  switch (reg_num) {
-    // Each 386 register is really 4 bytes wide, so we need to have these
-    // in groups of four, so that we can do clever efficient things
-    // (especially for the MEGA65's GS4502 CPU that can do 32-bit accesses
-    
-    //  Usable ZP locations extracted from: http://sta.c64.org/cbm64mem.html
-    
-    // EAX
-  case 0x00: return Operand(Operand::Type::literal, "$03"); // unused, fp->int routine pointer
-  case 0x01: return Operand(Operand::Type::literal, "$04");
-  case 0x02: return Operand(Operand::Type::literal, "$05"); // unused, int->fp routine pointer
-  case 0x03: return Operand(Operand::Type::literal, "$06");
-    
-    // EBX
-  case 0x04: return Operand(Operand::Type::literal, "$fb"); // unused 
-  case 0x05: return Operand(Operand::Type::literal, "$fc"); // unused
-  case 0x06: return Operand(Operand::Type::literal, "$fd"); // unused
-  case 0x07: return Operand(Operand::Type::literal, "$fe"); // unused
-    
-    // ECX
-  case 0x08: return Operand(Operand::Type::literal, "$19"); // String stack
-  case 0x09: return Operand(Operand::Type::literal, "$1A"); // String stack
-  case 0x0A: return Operand(Operand::Type::literal, "$1B"); // String stack
-  case 0x0B: return Operand(Operand::Type::literal, "$1C"); // String stack
-
-    // EDX
-  case 0x0C: return Operand(Operand::Type::literal, "$1D"); // String stack
-  case 0x0D: return Operand(Operand::Type::literal, "$1E"); // String stack
-  case 0x0E: return Operand(Operand::Type::literal, "$1F"); // String stack
-  case 0x0F: return Operand(Operand::Type::literal, "$20"); // String stack
-
-    // ESI
-  case 0x10: return Operand(Operand::Type::literal, "$39"); // Current BASIC line number
-  case 0x11: return Operand(Operand::Type::literal, "$3A"); // Current BASIC line number
-  case 0x12: return Operand(Operand::Type::literal, "$3B"); // Current BASIC line number for CONT
-  case 0x13: return Operand(Operand::Type::literal, "$3C"); // Current BASIC line number for CONT
-
-    // EDI
-  case 0x14: return Operand(Operand::Type::literal, "$A7"); // RS232 things
-  case 0x15: return Operand(Operand::Type::literal, "$A8"); // RS232 things
-  case 0x16: return Operand(Operand::Type::literal, "$A9"); // RS232 things
-  case 0x17: return Operand(Operand::Type::literal, "$AA"); // RS232 things
-
-    
+struct ASMLine
+{
+  enum class Type
+  {
+    Label,
+    Instruction,
+    Directive
   };
-  throw std::runtime_error("Unhandled register number: " + std::to_string(reg_num));
-}
+
+  ASMLine(Type t, std::string te) : type(t), text(std::move(te)) {}
+
+  Type type;
+  std::string text;
+};
+
 
 struct mos6502 : ASMLine
 {
@@ -422,7 +353,6 @@ struct mos6502 : ASMLine
 };
 
 
-
 struct i386 : ASMLine
 {
   enum class OpCode 
@@ -467,7 +397,92 @@ struct i386 : ASMLine
     retl
   };
 
-  static OpCode parse_opcode(Type t, const std::string &o)
+  static OpCode parse_opcode(Type t, const std::string &o);
+  static Operand parse_operand(std::string o);
+
+  i386(const int t_line_num, std::string t_line_text, Type t, std::string t_opcode, std::string o1="", std::string o2="");
+
+  int line_num;
+  std::string line_text;
+  OpCode opcode;
+  Operand operand1;
+  Operand operand2;
+};
+
+
+int parse_8bit_literal(const std::string &s)
+{
+  return std::stoi(std::string(std::next(std::begin(s)), std::end(s)));
+}
+
+
+
+Operand get_register(const int reg_num_in, const int offset = 0) {
+
+  const int reg_num = reg_num_in + offset;
+  
+  switch (reg_num) {
+    // Each 386 register is really 4 bytes wide, so we need to have these
+    // in groups of four, so that we can do clever efficient things
+    // (especially for the MEGA65's GS4502 CPU that can do 32-bit accesses
+    
+    //  Usable ZP locations extracted from: http://sta.c64.org/cbm64mem.html
+    
+    // EAX
+  case 0x00: return Operand(Operand::Type::literal, "$03"); // unused, fp->int routine pointer
+  case 0x01: return Operand(Operand::Type::literal, "$04");
+  case 0x02: return Operand(Operand::Type::literal, "$05"); // unused, int->fp routine pointer
+  case 0x03: return Operand(Operand::Type::literal, "$06");
+    
+    // EBX
+  case 0x04: return Operand(Operand::Type::literal, "$fb"); // unused 
+  case 0x05: return Operand(Operand::Type::literal, "$fc"); // unused
+  case 0x06: return Operand(Operand::Type::literal, "$fd"); // unused
+  case 0x07: return Operand(Operand::Type::literal, "$fe"); // unused
+    
+    // ECX
+  case 0x08: return Operand(Operand::Type::literal, "$19"); // String stack
+  case 0x09: return Operand(Operand::Type::literal, "$1A"); // String stack
+  case 0x0A: return Operand(Operand::Type::literal, "$1B"); // String stack
+  case 0x0B: return Operand(Operand::Type::literal, "$1C"); // String stack
+
+    // EDX
+  case 0x0C: return Operand(Operand::Type::literal, "$1D"); // String stack
+  case 0x0D: return Operand(Operand::Type::literal, "$1E"); // String stack
+  case 0x0E: return Operand(Operand::Type::literal, "$1F"); // String stack
+  case 0x0F: return Operand(Operand::Type::literal, "$20"); // String stack
+
+    // ESI
+  case 0x10: return Operand(Operand::Type::literal, "$39"); // Current BASIC line number
+  case 0x11: return Operand(Operand::Type::literal, "$3A"); // Current BASIC line number
+  case 0x12: return Operand(Operand::Type::literal, "$3B"); // Current BASIC line number for CONT
+  case 0x13: return Operand(Operand::Type::literal, "$3C"); // Current BASIC line number for CONT
+
+    // EDI
+  case 0x14: return Operand(Operand::Type::literal, "$A7"); // RS232 things
+  case 0x15: return Operand(Operand::Type::literal, "$A8"); // RS232 things
+  case 0x16: return Operand(Operand::Type::literal, "$A9"); // RS232 things
+  case 0x17: return Operand(Operand::Type::literal, "$AA"); // RS232 things
+
+    
+  };
+  throw std::runtime_error("Unhandled register number: " + std::to_string(reg_num));
+}
+
+std::string fixup_8bit_literal(const std::string &s)
+{
+  if (!strcmp(s.c_str(),"%eax")) return get_register(i386::parse_operand(s).reg_num,0).value;
+  if (!strcmp(s.c_str(),"(%eax)")) return "(" + get_register(0,0).value + ")";
+
+  if (s[0] == '$')
+  {
+    return "#" + std::to_string(static_cast<uint8_t>(parse_8bit_literal(s)));
+  } else {
+    return s;
+  }
+}
+
+i386::OpCode i386::parse_opcode(Type t, const std::string &o)
   {
     switch(t)
     {
@@ -519,7 +534,7 @@ struct i386 : ASMLine
     throw std::runtime_error("Unknown opcode: " + o);
   }
 
-  static Operand parse_operand(std::string o)
+Operand i386::parse_operand(std::string o)
   {
     if (o.empty()) {
       return Operand();
@@ -554,25 +569,16 @@ struct i386 : ASMLine
     }
   }
 
-  i386(const int t_line_num, std::string t_line_text, Type t, std::string t_opcode, std::string o1="", std::string o2="")
+i386::i386(const int t_line_num, std::string t_line_text, Type t, std::string t_opcode, std::string o1, std::string o2)
     : ASMLine(t, t_opcode), line_num(t_line_num), line_text(std::move(t_line_text)), 
       opcode(parse_opcode(t, t_opcode)), operand1(parse_operand(o1)), operand2(parse_operand(o2))
   {
   }
 
-  int line_num;
-  std::string line_text;
-  OpCode opcode;
-  Operand operand1;
-  Operand operand2;
-};
 
 void append_fetchb(std::vector<mos6502> &instructions,const Operand &o1)
 {
-        if (o1.type==Operand::Type::literal) {
-          instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
-        }
-        else if (o1.value[0]=='(') {
+        if (o1.value[0]=='(') {
           // Indirect argument 
           if (o1.value[1]=='%') {
             // Indirect fetch via register.
@@ -582,8 +588,16 @@ void append_fetchb(std::vector<mos6502> &instructions,const Operand &o1)
             // part of the address space back onto the bottom 64KB, which would probably corrupt things.
             if (o1.value[2]=='e') {
               // 32-bit register, so use 32-bit ZP indirect as access mode.
-              instructions.emplace_back(mos6502::OpCode::nop);
-              instructions.emplace_back(mos6502::OpCode::lda,Operand(o1.type,fixup_8bit_literal(o1.value)));
+	      if (cpu_45gs02) {	  
+		instructions.emplace_back(mos6502::OpCode::nop);
+		instructions.emplace_back(mos6502::OpCode::lda,Operand(o1.type,fixup_8bit_literal(o1.value)));
+	      } else {
+		// XXX - We can check that upper 16 bits are zero, and if so, we can do a normal 16-bit ZP indirect
+		// on a 6502. We should probably implement that. Trouble is that requires run-time check, unless
+		// we can prove from static analysis.
+		throw std::runtime_error("Indirect fetch through 32-bit register requires 45GS02");
+	      }
+		       
             } else {
               throw std::runtime_error("Cannot translate movb instruction");
             }
@@ -591,7 +605,7 @@ void append_fetchb(std::vector<mos6502> &instructions,const Operand &o1)
             throw std::runtime_error("Cannot translate movb instruction");
           }
         } else {
-          throw std::runtime_error("Cannot translate movb instruction");
+          instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
         }
 }
 
@@ -607,8 +621,12 @@ void append_storeb(std::vector<mos6502> &instructions,const Operand &o1)
             // part of the address space back onto the bottom 64KB, which would probably corrupt things.
             if (o1.value[2]=='e') {
               // 32-bit register, so use 32-bit ZP indirect as access mode.
-              instructions.emplace_back(mos6502::OpCode::nop);
-              instructions.emplace_back(mos6502::OpCode::sta,Operand(o1.type,fixup_8bit_literal(o1.value)));
+	      if (cpu_45gs02) {
+		instructions.emplace_back(mos6502::OpCode::nop);
+		instructions.emplace_back(mos6502::OpCode::sta,Operand(o1.type,fixup_8bit_literal(o1.value)));
+	      } else {
+		throw std::runtime_error("Indirect store through 32-bit register requires 45GS02");
+	      }
             } else {
               throw std::runtime_error("Cannot translate movb instruction");
             }
@@ -616,7 +634,7 @@ void append_storeb(std::vector<mos6502> &instructions,const Operand &o1)
             throw std::runtime_error("Cannot translate movb instruction");
           }
         } else {
-          instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
+          instructions.emplace_back(mos6502::OpCode::sta, Operand(o1.type, fixup_8bit_literal(o1.value)));
         }
 }
 
