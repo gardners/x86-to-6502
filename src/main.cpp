@@ -393,7 +393,7 @@ struct mos6502 : ASMLine
   {
     switch (type) {
       case ASMLine::Type::Label:
-        return text; // + ':';
+        return text + ':';
       case ASMLine::Type::Directive:
       case ASMLine::Type::Instruction:
         {
@@ -640,6 +640,36 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
         throw std::runtime_error("Cannot translate xorl instruction");
       }
       break;
+#if 0
+    case i386::OpCode::cmpl:
+      if (o1.type == Operand::Type::reg) {
+	if (cpu_45gs02) {
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::cmp, get_register(o1.reg_num));
+	} else {
+	  static int cmpl_count=0;
+	  char new_label_name[32];
+	  snprintf(new_label_name,31,"__cmppl_%d",cmpl_count++);
+	  instructions.emplace_back(mos6502::OpCode::cmp, get_register(o1.reg_num,3));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::cmp, get_register(o1.reg_num,2));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::cmp, get_register(o1.reg_num,1));
+	  instructions.emplace_back(mos6502::OpCode::bne, Operand(Operand::Type::literal,new_label_name));
+	  instructions.emplace_back(mos6502::OpCode::cmp, get_register(o1.reg_num,0));
+	  instructions.emplace_back(ASMLine::Type::Label, new_label_name);
+	}
+      } else {
+	if (cpu_45gs02) {
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::neg);
+	  instructions.emplace_back(mos6502::OpCode::cmp, o1);
+	} else
+	  throw std::runtime_error("cmpl opcode requires 45GS02");
+      }
+      break;
+#endif
     case i386::OpCode::movb:
       if (o1.type == Operand::Type::literal && o2.type == Operand::Type::literal) {
         instructions.emplace_back(mos6502::OpCode::lda, Operand(o1.type, fixup_8bit_literal(o1.value)));
