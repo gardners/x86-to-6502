@@ -169,6 +169,7 @@ struct mos6502 : ASMLine
     clc,
     sec,
       bit,
+    jsr,
 
     // 45GS02 / 4510 opcodes
       ldz,
@@ -211,6 +212,7 @@ struct mos6502 : ASMLine
       case OpCode::ORA:
       case OpCode::cmp:
       case OpCode::jmp:
+      case OpCode::jsr:
       case OpCode::adc:
       case OpCode::sbc:
       case OpCode::rts:
@@ -261,6 +263,7 @@ struct mos6502 : ASMLine
       case OpCode::dec:
       case OpCode::ORA:
       case OpCode::jmp:
+      case OpCode::jsr:
       case OpCode::bne:
       case OpCode::bmi:
       case OpCode::beq:
@@ -366,6 +369,8 @@ struct mos6502 : ASMLine
         return "beq";
       case OpCode::jmp:
         return "jmp";
+      case OpCode::jsr:
+        return "jsr";
       case OpCode::adc:
         return "adc";
       case OpCode::sbc:
@@ -429,6 +434,7 @@ struct i386 : ASMLine
     addb,
     ret,
     movb,
+    call,
     cmpb,
     cmpl,
     movl,
@@ -475,6 +481,7 @@ struct i386 : ASMLine
           if (o == "andl") return OpCode::andl;
           if (o == "ret") return OpCode::ret;
           if (o == "movb") return OpCode::movb;
+          if (o == "call") return OpCode::call;
           if (o == "cmpb") return OpCode::cmpb;
           if (o == "cmpl") return OpCode::cmpl;
           if (o == "movl") return OpCode::movl;
@@ -827,6 +834,9 @@ void translate_instruction(std::vector<mos6502> &instructions, const i386::OpCod
       break;
     case i386::OpCode::jmp:
       instructions.emplace_back(mos6502::OpCode::jmp, o1);
+      break;
+    case i386::OpCode::call:
+      instructions.emplace_back(mos6502::OpCode::jsr, o1);
       break;
     case i386::OpCode::addb:
       if (o1.type == Operand::Type::literal && o2.type == Operand::Type::reg) {
